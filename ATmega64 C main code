@@ -1,0 +1,193 @@
+//Simple sin wave plotter (AVR code) GLcd ks0108 , Atmega64  
+//libraries
+#include <io.h>
+#include <stdio.h>
+#include <mega64.h>
+#include <delay.h>
+
+//lcd's pin declaration 
+#define LCD_PORT PORTD
+#define LCD_RST  PORTE.0
+#define LCD_E    PORTE.1
+#define LCD_RW   PORTE.2
+#define LCD_RS   PORTE.3
+#define LCD_CS2  PORTE.4
+#define LCD_CS1  PORTE.5
+
+void clr_lcd();                                    //clear lcd function            
+int hex_con(int adc_value);                        // return a hex value for printing data in each page 
+void write_lcd(char columns,char page,char data);  //writing lcd function
+void LatchLCD();                                   //for latching data            
+void Glcd_init();                                  //initializing first column,page and line          
+
+
+void main(void)
+{
+  int i,j,Graph;// variables
+
+  DDRD=0XFF;
+  DDRE=0XFF;
+  DDRB=0x00;
+  PORTB=0x00;
+  DDRF=0xFF;
+  PORTF=0x00;
+  Glcd_init();
+    while(1) 
+    { 
+             
+        Glcd_init();//go to first page and first column   
+        clr_lcd();  //clear lcd 
+        for(i=0;i<128;i++)//print adc values on lcd
+          { 
+             PORTF=PINB; //for seeing port B reciving data on PORTF
+             Graph=hex_con(PINB/4);   
+             j=PINB/32;
+             write_lcd(i,j,Graph);  
+             delay_ms(100);
+           } 
+//two simple codes for testing Glcd         
+//-------------------------------------
+//       m=8;
+//       for(j=0;j<8;j++) {    
+//         for(i=0;i<m;i++) {
+//             write_lcd(i,j,0xff);
+//             delay_ms(10);
+//          }
+//          m+=8;
+//         } 
+//------------------------------------
+//       for(j=0;j<8;j++) {    
+//         for(i=1;i<128;i++) {
+//             write_lcd(i,j,i);
+//             delay_ms(10);
+//          }
+//         } 
+//--------------------------------------
+
+ }
+ 
+ }    
+//--------------------------------------------------
+void write_lcd(char columns,char page,char data)
+{
+    if(columns >= 64)       //select second area   
+    {
+        LCD_CS1=0;
+        LCD_CS2=1;
+    }
+    else                    //select first area
+    {
+        LCD_CS1=1;
+        LCD_CS2=0;
+    }
+    LCD_RS=0;              //command type if RS=0 else data(RS=1)
+    LCD_RW=0;              //write mode(RW=0) enable (Read mode RW=1)
+    LCD_PORT=0XB8 | page;  // 0xB8 1011 1000 first page 
+    LatchLCD();            //latching data or command
+    
+    LCD_RS=0;              //command
+    LCD_RW=0;              //write
+    LCD_PORT=0X40 | columns; // BI LCD_PORT = 0100 0000 | columns (for example column 2 = 0010 )  
+    LatchLCD();
+    
+    LCD_RS=1;             //data
+    LCD_RW=0;             //write
+    LCD_PORT = data;
+    LatchLCD();   
+}
+//----------------------------------------------------
+void Glcd_init()
+{
+    unsigned char t;
+    LCD_RST=0;           //generate a clock signal on RST pin 
+    delay_ms(10);        //to reset lcd
+    LCD_RST=1;
+    delay_ms(100); 
+    LCD_RS=0;            //command
+    LCD_RW=0;            //write
+    LCD_CS1=1;           // select first driver and first area
+    LCD_CS2=0;           //turn off second driver 
+    for(t=0;t<2;t++)
+    {
+        LCD_PORT=0x3E;   //display off  (0x3E = 0011 1110)
+        LatchLCD();
+        LCD_PORT=0X40;   //column address i = 0 (0x40 = 0100 0000)
+        LatchLCD(); 
+        LCD_PORT=0xB8 ;  //page address j = 0  (0xB8 = 1011 1000)
+        LatchLCD();
+        LCD_PORT=0xC0;   //display start line = 0 (0xC0 = 1100 0000)
+        LatchLCD();
+        LCD_PORT=0X3F;   //display on  (0x3F=0011 1111)
+        LatchLCD();
+        LCD_CS1=~LCD_CS1;//change between lcd's two area 
+        LCD_CS2=~LCD_CS2;
+    }
+}
+//---------------------------------------------
+void LatchLCD()         //latching data on pins
+{
+    delay_us(7);
+    LCD_E=1;
+    delay_us(7);
+    LCD_E=0;
+}
+//----------------------------------------------
+int hex_con(int adc_value) //return a hex value for printing
+{                      //a dot in appropriate place 
+    int w;             // in vertical axis in each pages
+    switch(adc_value%8)
+    {
+        case 0 :{
+           w=0x01;     //first block in cursor
+           break;      //0000 0001
+        } 
+             
+           case 1 :{
+           w=0x02;    //0000 0010 second block
+           break;
+        } 
+             
+           case 2 :{
+           w=0x04;    //0000 0100  third block
+           break;
+        }                           //etc
+                                    // ...
+         case 3 :{
+           w=0x08;    //0000 1000 
+           break;
+        } 
+              
+         case 4 :{
+           w=0x10;    //0001 0000
+           break;
+        } 
+                
+        case 5 :{
+           w=0x20;   //0010 0000
+           break;
+        } 
+         case 6 :{
+           w=0x40;   //0100 0000
+           break;
+        }
+         case 7 :{
+           w=0x80;   //1000 0000 
+           break;
+        }
+          
+    }
+    return w; 
+    }
+      
+//--------------------------
+void clr_lcd()      //clearing lcd via printing 0x00
+{                   //printing nothing :)
+    int m,k;
+     for(m=0;m<8;m++)
+        {
+          for(k=0;k<128;k++)
+              {
+                 write_lcd(k,m,0x00);
+              }  
+        }
+} 
